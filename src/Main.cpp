@@ -3,15 +3,18 @@
 
 #include <fontconfig/fontconfig.h>
 #include <chrono>
+#include <thread>
 
 using namespace std;
 using namespace glm;
 
 uint8_t Main::bits = 0;
-Segment segments[7];
+float Main::frameNum = 0;
 
 constexpr double targetFPS = 60.0;
 constexpr double targetFrameTime = 1.0 / targetFPS;
+
+auto previousTime = std::chrono::high_resolution_clock::now();
 
 auto lastFrame = chrono::high_resolution_clock::now();
 
@@ -33,16 +36,6 @@ constexpr uint8_t digitToSegments[16] = {
     0b1111001, // E
     0b1110001 // F
 };
-
-constexpr void updateSegments(const uint8_t value)
-{
-    const uint8_t segBits = digitToSegments[value & 0xF];
-    for (int i = 0; i < 7; ++i)
-    {
-        const bool isOn = (segBits >> i) & 1;
-        segments[i].color = isOn ? vec3(1.0f, 0.0f, 0.0f) : vec3(0.2f);
-    }
-}
 
 vector<vec2> createSegment(const float cx, const float cy, const float length, const float thickness, const float taper)
 {
@@ -79,6 +72,76 @@ vector<vec2> createSquare(const float cx, const float cy, const float size)
     };
 }
 
+array<Segment, 7> calculateSegments(const vec2 screenSize, const uint8_t segmentValue)
+{
+    array<Segment, 7> segments;
+    const float centerX = screenSize.x / 2.0f;
+    const float yOffset = screenSize.y * -0.1;
+    const float centerY = screenSize.y / 2.0f + yOffset;
+
+    const float segmentLength = screenSize.y * 0.25f;
+    const float thickness = screenSize.y * 0.06f;
+
+
+    const float verticalX = segmentLength / 2 + thickness / 2;
+    const float upperVerticalY = centerY - segmentLength / 2 - thickness / 2;
+    const float lowerVerticalY = centerY + segmentLength / 2 + thickness / 2;
+
+    segments[0].points = createSegment(centerX, centerY - segmentLength - thickness, segmentLength, thickness, 0);
+    segments[3].points = createSegment(centerX, centerY + segmentLength + thickness, segmentLength, thickness, 0);
+    segments[6].points = createSegment(centerX, centerY, segmentLength, thickness, 0);
+
+
+    segments[1].points = rotate90CCW(
+        createSegment(centerX + verticalX, upperVerticalY, segmentLength, thickness, 0),
+        centerX + verticalX, upperVerticalY);
+    segments[2].points = rotate90CCW(
+        createSegment(centerX + verticalX, lowerVerticalY, segmentLength, thickness, 0),
+        centerX + verticalX, lowerVerticalY);
+    segments[4].points = rotate90CCW(
+        createSegment(centerX - verticalX, lowerVerticalY, segmentLength, thickness, 0),
+        centerX - verticalX, lowerVerticalY);
+    segments[5].points = rotate90CCW(
+        createSegment(centerX - verticalX, upperVerticalY, segmentLength, thickness, 0),
+        centerX - verticalX, upperVerticalY);
+
+    const uint8_t segBits = digitToSegments[segmentValue & 0xF];
+    for (int i = 0; i < 7; ++i)
+    {
+        const bool isOn = (segBits >> i) & 1;
+        segments[i].color = isOn ? vec3(1.0f, 0.0f, 0.0f) : vec3(0.2f);
+    }
+    return segments;
+}
+
+auto calculateBitIndicators(const vec2 screenSize)
+{
+
+    array<Segment, 7> segments;
+    const float centerX = screenSize.x / 2.0f;
+    const float yOffset = screenSize.y * -0.1;
+    const float centerY = screenSize.y / 2.0f + yOffset;
+
+    const float segmentLength = screenSize.y * 0.25f;
+    const float thickness = screenSize.y * 0.06f;
+
+    const float squareSize = screenSize.y * 0.06f;
+    const float gap = screenSize.x * 0.01f;
+
+    const float baseY = centerY + segmentLength + thickness * 3.0f + 20.0f;
+
+    const float totalWidth = squareSize * 4 + gap * 3;
+    const float startX = centerX - totalWidth / 2 + squareSize / 2;
+
+    vector<vector<vec2>>  bitIndicators(4);
+    for (int i = 0; i < 4; ++i)
+    {
+        const float x = startX + i * (squareSize + gap);
+        bitIndicators[i] = createSquare(x, baseY, squareSize);
+    }
+    return bitIndicators;
+}
+
 int main()
 {
     if (!FcInit()) {
@@ -86,61 +149,31 @@ int main()
         return -1;
     }
 
-    constexpr float centerX = 300.0f;
-    constexpr float centerY = 300.0f;
-
-    constexpr float segmentLength = 120.0f;
-    constexpr float thickness = 30.0f;
-    constexpr float taper = 0.0f;
-
-    constexpr float verticalX = segmentLength / 2 + thickness / 2;
-    constexpr float upperVerticalY = centerY - segmentLength / 2 - thickness / 2;
-    constexpr float lowerVerticalY = centerY + segmentLength / 2 + thickness / 2;
-
-    segments[0].points = createSegment(centerX, centerY - segmentLength - thickness, segmentLength, thickness, taper);
-    segments[3].points = createSegment(centerX, centerY + segmentLength + thickness, segmentLength, thickness, taper);
-    segments[6].points = createSegment(centerX, centerY, segmentLength, thickness, taper);
-
-
-    segments[1].points = rotate90CCW(
-        createSegment(centerX + verticalX, upperVerticalY, segmentLength, thickness, taper),
-        centerX + verticalX, upperVerticalY);
-    segments[2].points = rotate90CCW(
-        createSegment(centerX + verticalX, lowerVerticalY, segmentLength, thickness, taper),
-        centerX + verticalX, lowerVerticalY);
-    segments[4].points = rotate90CCW(
-        createSegment(centerX - verticalX, lowerVerticalY, segmentLength, thickness, taper),
-        centerX - verticalX, lowerVerticalY);
-    segments[5].points = rotate90CCW(
-        createSegment(centerX - verticalX, upperVerticalY, segmentLength, thickness, taper),
-        centerX - verticalX, upperVerticalY);
-
-    constexpr float squareSize = 50.0f;
-    constexpr float gap = 10.0f;
-    constexpr float baseY = centerY + segmentLength + thickness * 3.0f + 20.0f;
-
-    constexpr float totalWidth = squareSize * 4 + gap * 3;
-    constexpr float startX = centerX - totalWidth / 2 + squareSize / 2;
-
-    vector<vector<vec2>> bitSquares(4);
-    for (int i = 0; i < 4; ++i)
-    {
-        const float x = startX + i * (squareSize + gap);
-        bitSquares[i] = createSquare(x, baseY, squareSize);
-    }
-
-    auto* renderer = new Renderer(600, 800, "Sieben-Segment-Display");
+    const auto* renderer = new Renderer(400, 600, "Sieben-Segment-Display");
     GLFWwindow* window = renderer->getWindow();
     while (!glfwWindowShouldClose(window))
     {
+
+        auto currentTime = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> elapsed = currentTime - previousTime;
+        if (elapsed.count() < targetFrameTime)
+        {
+            std::this_thread::sleep_for(
+                std::chrono::duration<double>(targetFrameTime - elapsed.count()));
+        }
+        previousTime = std::chrono::high_resolution_clock::now();
+
+
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        renderer->drawFrame(segments, bitSquares);
+
+        renderer->drawFrame(calculateSegments(renderer->getScreenSize(), Main::getBits()), calculateBitIndicators(renderer->getScreenSize()));
 
         glfwSwapBuffers(window);
         glfwPollEvents();
-        updateSegments(Main::getBits());
+
+        (*Main::getFramePtr())++;
     }
 
     delete renderer;
@@ -152,6 +185,16 @@ int main()
 uint8_t Main::getBits()
 {
     return bits;
+}
+
+float Main::getFrame()
+{
+    return frameNum;
+}
+
+float* Main::getFramePtr()
+{
+    return &frameNum;
 }
 
 void Main::setBits(const uint8_t& newBits)

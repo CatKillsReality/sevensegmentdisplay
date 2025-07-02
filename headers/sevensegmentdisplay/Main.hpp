@@ -10,7 +10,10 @@ class Main
 public:
     static void setBits(const uint8_t& bits);
     static uint8_t getBits();
+    static float getFrame();
+    static float* getFramePtr();
 
 private:
     static uint8_t bits;
+    static float frameNum;
 };

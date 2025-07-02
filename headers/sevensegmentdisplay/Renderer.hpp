@@ -7,19 +7,26 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
+#include <glm/gtc/type_ptr.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
-using std::vector, std::array, std::span, glm::vec2;
+using namespace glm;
+using std::vector, std::array, std::span;
 
 class Renderer
 {
 public:
     Renderer(const int& width, const int& height, const char* title);
     ~Renderer();
-    void drawFrame(span<const Segment> segments, const vector<vector<vec2>>& bitSquares) const;
+    void drawFrame(const array<Segment, 7>& segments, const vector<vector<vec2>>& bitSquares) const;
     [[nodiscard]] GLFWwindow* getWindow() const;
+    [[nodiscard]] vec2 getScreenSize() const;
+    void setScreenSize(vec2 newScreenSize);
 
 private:
     GLFWwindow* window;
+    mat4 projection{};
+    vec2 screenSize{};
     GLuint shaderProgram{};
     GLuint vao{};
     GLuint vbo{};

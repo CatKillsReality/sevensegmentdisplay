@@ -2,15 +2,17 @@
 #include "sevensegmentdisplay/Main.hpp"
 
 #include <fstream>
-#include <sstream>
 
 using namespace std;
 using namespace glm;
 
+
+mat4 projection;
 GLFWwindow* window;
 
 GLuint shaderProgram;
 GLuint vao, vbo;
+GLint projectionLoc;
 
 GLuint compileShader(const GLenum type, const std::string& src)
 {
@@ -30,12 +32,6 @@ GLuint compileShader(const GLenum type, const std::string& src)
     }
 
     return shader;
-}
-
-
-vec2 toNDC(const float x, const float y)
-{
-    return {x / 300.0f - 1.0f, 1.0f - y / 400.0f};
 }
 
 void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods)
@@ -72,8 +68,24 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
     }
 }
 
+void resizeCallback(GLFWwindow* window, int width, int height)
+{
+    glViewport(0, 0, width, height);
+
+    if (auto* renderer = static_cast<Renderer*>(glfwGetWindowUserPointer(window)))
+    {
+        renderer->setScreenSize({width, height});
+    }
+    else throw runtime_error("Failed to resize window due to invalid Renderer pointer");
+    projection = ortho(0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f);
+    glUniformMatrix4fv(projectionLoc, 1, GL_FALSE, value_ptr(projection));
+}
+
 Renderer::Renderer(const int& width, const int& height, const char* title)
 {
+    screenSize = {width, height};
+    projection = ortho(0.0f, screenSize.x, screenSize.y, 0.0f);
+
     if (!glfwInit())
     {
         throw runtime_error("Failed to initialize GLFW");
@@ -81,7 +93,8 @@ Renderer::Renderer(const int& width, const int& height, const char* title)
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    glfwWindowHint(GLFW_RESIZABLE, GL_FALSE);
+    glfwWindowHint(GLFW_RESIZABLE, GL_TRUE);
+
 
     window = glfwCreateWindow(width, height, title, nullptr, nullptr);
     if (!window)
@@ -89,10 +102,11 @@ Renderer::Renderer(const int& width, const int& height, const char* title)
         glfwTerminate();
         throw runtime_error("Failed to create GLFW window");
     }
-
+    glfwSetWindowUserPointer(window, this);
     glfwMakeContextCurrent(window);
 
     glfwSetKeyCallback(window, keyCallback);
+    glfwSetFramebufferSizeCallback(window, resizeCallback);
 
     glfwSwapInterval(1);
 
@@ -105,28 +119,96 @@ Renderer::Renderer(const int& width, const int& height, const char* title)
 
     constexpr auto vertexShaderSrc = R"glsl(
     #version 330 core
-    layout (location = 0) in vec2 aPos;
-    uniform mat4 projection;
-    void main() {
+    layout(location = 0) in vec2 aPos;      // vertex position input
+    layout(location = 1) in vec2 aUV;       // UV input
+    layout(location = 2) in vec3 aColor;    // vertex color input
+
+
+    out vec2 fragUV;
+    out vec3 fragColor;                     // pass to fragment shader
+    uniform mat4 projection;                // uniform projection matrix
+
+    void main()
+    {
         gl_Position = projection * vec4(aPos, 0.0, 1.0);
+        fragUV = aUV;
+        fragColor = aColor;
     }
     )glsl";
 
     constexpr auto fragmentShaderSrc = R"glsl(
     #version 330 core
-    out vec4 FragColor;
-    uniform vec3 color;
-    void main() {
-        FragColor = vec4(color, 1.0);
+uniform vec2 resolution;
+in vec2 fragUV;
+in vec3 fragColor;
+out vec4 FragColor;
+
+uniform float time;
+
+float hash(vec2 p) {
+    return fract(1e4 * sin(17.0 * p.x + p.y * 0.1) * (0.1 + abs(sin(p.y * 13.0 + p.x))));
+}
+
+float noise(vec2 x) {
+    vec2 i = floor(x);
+    vec2 f = fract(x);
+    float a = hash(i);
+    float b = hash(i + vec2(1.0, 0.0));
+    float c = hash(i + vec2(0.0, 1.0));
+    float d = hash(i + vec2(1.0, 1.0));
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    return mix(a, b, u.x) + (c - a) * u.y * (1.0 - u.x) + (d - b) * u.x * u.y;
+}
+
+float fbm(vec2 p) {
+    float value = 0.0;
+    float freq = 1.0;
+    float amp = 0.5;
+    for (int i = 0; i < 14; ++i) {
+        value += amp * noise((p - vec2(1.0)) * freq);
+        freq *= 1.9;
+        amp *= 0.6;
     }
+    return value;
+}
+
+float pattern(vec2 p) {
+    vec2 aPos = vec2(sin(time/60 * 0.005), sin((time/60) * 0.01)) * 6.0;
+    float a = fbm(p * vec2(3.0) + aPos);
+
+    vec2 bPos = vec2(sin((time/60) * 0.01), sin((time/60) * 0.01)) * 1.0;
+    float b = fbm((p + a) * vec2(0.6) + bPos);
+
+    vec2 cPos = vec2(-0.6, -0.5) + vec2(sin(-(time/60) * 0.001), sin((time/60) * 0.01)) * 2.0;
+    float c = fbm((p + b) * vec2(2.6) + cPos);
+
+    return c;
+}
+
+vec3 palette(float t) {
+    vec3 a = vec3(0.55, 0.0, 0.0);  // brighter dark red base
+    vec3 b = vec3(0.3, 0.0, 0.0);  // smaller amplitude for less dark dips
+    vec3 c = vec3(1.0, 1.0, 1.0);
+    vec3 d = vec3(0.0, 0.0, 0.0);
+    return a + b * cos(6.28318 * (c * t + d));
+}
+
+void main() {
+    //vec2 uv = fragUV * 2.0 - 1.0;
+    //float aspect = resolution.x / resolution.y;
+    //uv.x *= aspect;
+    //float val = pow(pattern(uv), 2.0);
+    //vec3 col = palette(val);
+    //bool isRedSegment = (fragColor.r > 0.5 && fragColor.g < 0.2 && fragColor.b < 0.2) ? false : true;
+
+    FragColor = vec4(fragColor, 1.0);
+}
+
+
+
     )glsl";
-
-
-
     const GLuint vertexShader = compileShader(GL_VERTEX_SHADER, vertexShaderSrc);
     const GLuint fragmentShader = compileShader(GL_FRAGMENT_SHADER, fragmentShaderSrc);
-
-
 
     shaderProgram = glCreateProgram();
     glAttachShader(shaderProgram, vertexShader);
@@ -148,19 +230,10 @@ Renderer::Renderer(const int& width, const int& height, const char* title)
     glDeleteShader(fragmentShader);
     glUseProgram(shaderProgram);
 
-    constexpr float left = -1.0f;
-    constexpr float right = 1.0f;
-    constexpr float bottom = -1.0f;
-    constexpr float top = 1.0f;
-    constexpr float projection[16] = {
-        2.0f / (right - left), 0, 0, 0,
-        0, 2.0f / (top - bottom), 0, 0,
-        0, 0, -1, 0,
-        -(right + left) / (right - left), -(top + bottom) / (top - bottom), 0, 1
-    };
-    const GLint projLoc = glGetUniformLocation(shaderProgram, "projection");
-    glUniformMatrix4fv(projLoc, 1, GL_FALSE, projection);
+    projectionLoc = glGetUniformLocation(shaderProgram, "projection");
 
+    glUniformMatrix4fv(projectionLoc, 1, GL_FALSE, value_ptr(projection));
+    glUniform2f(glGetUniformLocation(shaderProgram, "resolution"), screenSize.x, screenSize.y);
 
     glGenVertexArrays(1, &vao);
     glGenBuffers(1, &vbo);
@@ -168,9 +241,21 @@ Renderer::Renderer(const int& width, const int& height, const char* title)
     glBindVertexArray(vao);
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
 
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 2, static_cast<void*>(nullptr));
+    constexpr GLsizei stride = 7 * sizeof(float);
+
+    // position (location 0)
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, static_cast<void*>(nullptr));
     glEnableVertexAttribArray(0);
 
+    // uv (location 1)
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void*>(2 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+
+    // color (location 2)
+    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void*>(2 * sizeof(float)));
+    glEnableVertexAttribArray(2);
+
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
 }
 
@@ -184,22 +269,31 @@ Renderer::~Renderer()
     glfwTerminate();
 }
 
-void Renderer::drawFrame(const span<const Segment> segments, const vector<vector<vec2>>& bitSquares) const
+void Renderer::drawFrame(const array<Segment, 7>& segments, const vector<vector<vec2>>& bitSquares) const
 {
-
-
     glUseProgram(shaderProgram);
     glBindVertexArray(vao);
 
+
+    glUniform1f(glGetUniformLocation(shaderProgram, "time"), Main::getFrame());
+    glUniform2f(glGetUniformLocation(shaderProgram, "resolution"), screenSize.x, screenSize.y);
+
     // Draw segments
-    for (const auto& segment : segments)
+    for (const auto& [points, color] : segments)
     {
         vector<float> vertices;
-        for (const vec2& p : segment.points)
+        // For each point, add x,y then r,g,b
+        for (const vec2& p : points)
         {
-            vec2 ndc = toNDC(p.x, p.y);
-            vertices.push_back(ndc.x);
-            vertices.push_back(ndc.y);
+            vec2 uv = vec2(p.x / screenSize.x, p.y / screenSize.y);
+
+            vertices.push_back(p.x);
+            vertices.push_back(p.y);
+            vertices.push_back(uv.x);
+            vertices.push_back(uv.y);
+            vertices.push_back(color.r);
+            vertices.push_back(color.g);
+            vertices.push_back(color.b);
         }
 
         glBindBuffer(GL_ARRAY_BUFFER, vbo);
@@ -208,12 +302,10 @@ void Renderer::drawFrame(const span<const Segment> segments, const vector<vector
                      vertices.data(),
                      GL_DYNAMIC_DRAW);
 
-        GLint colorLoc = glGetUniformLocation(shaderProgram, "color");
-        glUniform3f(colorLoc, segment.color.x, segment.color.y, segment.color.z);
-
-        glDrawArrays(GL_TRIANGLE_FAN, 0, static_cast<GLsizei>(vertices.size() / 2));
+        glDrawArrays(GL_TRIANGLE_FAN, 0, static_cast<GLsizei>(vertices.size() / 7));
     }
 
+    // Draw bitSquares
     for (int i = 0; i < 4; ++i)
     {
         const int bitIndex = 3 - i;
@@ -222,11 +314,18 @@ void Renderer::drawFrame(const span<const Segment> segments, const vector<vector
         const vec3 color = isOn ? vec3(1.0f, 0.0f, 0.0f) : vec3(0.2f);
 
         vector<float> vertices;
+        // Add position and color per vertex
         for (const vec2& p : bitSquares[i])
         {
-            vec2 ndc = toNDC(p.x, p.y);
-            vertices.push_back(ndc.x);
-            vertices.push_back(ndc.y);
+            vec2 uv = vec2(p.x / screenSize.x, p.y / screenSize.y);
+
+            vertices.push_back(p.x);
+            vertices.push_back(p.y);
+            vertices.push_back(uv.x);
+            vertices.push_back(uv.y);
+            vertices.push_back(color.r);
+            vertices.push_back(color.g);
+            vertices.push_back(color.b);
         }
 
         glBindBuffer(GL_ARRAY_BUFFER, vbo);
@@ -235,17 +334,25 @@ void Renderer::drawFrame(const span<const Segment> segments, const vector<vector
                      vertices.data(),
                      GL_DYNAMIC_DRAW);
 
-        const GLint colorLoc = glGetUniformLocation(shaderProgram, "color");
-        glUniform3f(colorLoc, color.x, color.y, color.z);
-
-        glDrawArrays(GL_TRIANGLE_FAN, 0, static_cast<GLsizei>(vertices.size() / 2));
+        glDrawArrays(GL_TRIANGLE_FAN, 0, static_cast<GLsizei>(vertices.size() / 7));
     }
+
+    glBindVertexArray(0);
 }
+
 
 GLFWwindow* Renderer::getWindow() const
 {
     return window;
 }
 
+vec2 Renderer::getScreenSize() const
+{
+    return screenSize;
+}
 
-
+void Renderer::setScreenSize(const vec2 newScreenSize)
+{
+    screenSize.x = newScreenSize.x;
+    screenSize.y = newScreenSize.y;
+}
