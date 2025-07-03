@@ -11,6 +11,7 @@ mat4 projection;
 GLFWwindow *window;
 
 GLuint shaderProgram;
+GLuint glowShaderProgram;
 GLuint vao, vbo;
 GLint projectionLoc;
 
@@ -210,17 +211,56 @@ void main() {
         FragColor = vec4(fragColor, 1.0);
     }
 }
+)glsl";
+
+    constexpr auto glowVertexShaderSrc = R"glsl(
+    #version 330 core
+    layout(location = 0) in vec2 aPos;      // vertex position input
+    layout(location = 1) in vec2 aUV;       // UV input
+    layout(location = 2) in vec3 aColor;    // vertex color input
 
 
+    out vec2 fragUV;
+    out vec3 fragColor;                     // pass to fragment shader
+    uniform mat4 projection;                // uniform projection matrix
 
+    void main()
+    {
+        gl_Position = projection * vec4(aPos, 0.0, 1.0);
+        fragUV = aUV;
+        fragColor = aColor;
+    }
     )glsl";
+
+    constexpr auto glowFragShaderSrc = R"glsl(
+    #version 330 core
+uniform vec2 resolution;
+in vec2 fragUV;
+in vec3 fragColor;
+out vec4 FragColor;
+
+uniform float time;
+
+void main() {
+        float dist = length(fragUV -vec2(0.5));
+        float intensity = smoothstep(0.4, 0.0, dist);
+        FragColor = vec4(fragColor, intensity * 0.6);
+}
+)glsl";
     const GLuint vertexShader = compileShader(GL_VERTEX_SHADER, vertexShaderSrc);
     const GLuint fragmentShader = compileShader(GL_FRAGMENT_SHADER, fragmentShaderSrc);
+    const GLuint glowVertexShader = compileShader(GL_VERTEX_SHADER, glowVertexShaderSrc);
+    const GLuint glowFragShader = compileShader(GL_FRAGMENT_SHADER, glowFragShaderSrc);
 
     shaderProgram = glCreateProgram();
+    glowShaderProgram = glCreateProgram();
     glAttachShader(shaderProgram, vertexShader);
     glAttachShader(shaderProgram, fragmentShader);
     glLinkProgram(shaderProgram);
+
+    glAttachShader(glowShaderProgram, glowVertexShader);
+    glAttachShader(glowShaderProgram, glowFragShader);
+    glLinkProgram(glowShaderProgram);
 
     int success;
     glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
@@ -231,9 +271,19 @@ void main() {
         cerr << "Shader Program linking failed: " << infoLog << "\n";
         throw runtime_error("Shader Program linking failed");
     }
+    glGetProgramiv(glowShaderProgram, GL_LINK_STATUS, &success);
+
+    if (!success) {
+        char infoLog[1024];
+        glGetProgramInfoLog(glowShaderProgram, sizeof(infoLog), nullptr, infoLog);
+        cerr << "Shader Program linking failed: " << infoLog << "\n";
+        throw runtime_error("Shader Program linking failed");
+    }
 
     glDeleteShader(vertexShader);
     glDeleteShader(fragmentShader);
+    glDeleteShader(glowVertexShader);
+    glDeleteShader(glowFragShader);
     glUseProgram(shaderProgram);
 
     projectionLoc = glGetUniformLocation(shaderProgram, "projection");
@@ -279,7 +329,6 @@ void Renderer::drawFrame(const array<Segment, 7> &segments, const vector<vector<
     glUseProgram(shaderProgram);
     glBindVertexArray(vao);
 
-
     glUniform1f(glGetUniformLocation(shaderProgram, "time"), Main::getFrame());
     glUniform2f(glGetUniformLocation(shaderProgram, "resolution"), screenSize.x, screenSize.y);
 
@@ -323,7 +372,6 @@ void Renderer::drawFrame(const array<Segment, 7> &segments, const vector<vector<
 
         glDrawArrays(GL_TRIANGLE_FAN, 0, static_cast<GLsizei>(vertices.size() / 7));
     }
-
     // Draw bit Indicators
     for (int i = 0; i < 4; ++i) {
         const int bitIndex = 3 - i;
@@ -353,7 +401,6 @@ void Renderer::drawFrame(const array<Segment, 7> &segments, const vector<vector<
 
         glDrawArrays(GL_TRIANGLE_FAN, 0, static_cast<GLsizei>(vertices.size() / 7));
     }
-
     glBindVertexArray(0);
 }
 

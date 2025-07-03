@@ -28,6 +28,7 @@ private:
     mat4 projection{};
     vec2 screenSize{};
     GLuint shaderProgram{};
+    GLuint glowShaderProgram{};
     GLuint vao{};
     GLuint vbo{};
 };
