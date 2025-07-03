@@ -109,7 +109,7 @@ array<Segment, 7> calculateSegments(const vec2 screenSize, const uint8_t segment
     for (int i = 0; i < 7; ++i)
     {
         const bool isOn = (segBits >> i) & 1;
-        segments[i].color = isOn ? vec3(1.0f, 0.0f, 0.0f) : vec3(0.2f);
+        segments[i].color = isOn ? vec3(1.0f, 0.0f, 0.0f) : vec3(1.0f);
     }
     return segments;
 }
@@ -164,7 +164,7 @@ int main()
         previousTime = std::chrono::high_resolution_clock::now();
 
 
-        glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 
