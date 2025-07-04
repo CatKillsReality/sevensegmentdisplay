@@ -8,22 +8,24 @@ using namespace glm;
 
 
 mat4 projection;
-GLFWwindow *window;
+GLFWwindow* window;
 vec2 Renderer::screenSize = vec2(0);
 
 GLuint shaderProgram;
 GLuint vao, vbo;
 GLint projectionLoc;
 
-GLuint compileShader(const GLenum type, const std::string &src) {
+GLuint compileShader(const GLenum type, const std::string& src)
+{
     const GLuint shader = glCreateShader(type);
-    const char *srcPtr = src.c_str();
+    const char* srcPtr = src.c_str();
     glShaderSource(shader, 1, &srcPtr, nullptr);
     glCompileShader(shader);
 
     GLint success = 0;
     glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
-    if (!success) {
+    if (!success)
+    {
         char infoLog[1024];
         glGetShaderInfoLog(shader, sizeof(infoLog), nullptr, infoLog);
         std::cerr << "Shader compilation failed: " << infoLog << "\n";
@@ -33,67 +35,76 @@ GLuint compileShader(const GLenum type, const std::string &src) {
     return shader;
 }
 
-void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods) {
-    if (action == GLFW_PRESS || action == GLFW_REPEAT) {
+void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods)
+{
+    if (action == GLFW_PRESS || action == GLFW_REPEAT)
+    {
         uint8_t inputBits = Main::getBits();
-        switch (key) {
-            case GLFW_KEY_F4:
-                inputBits ^= 1 << 0; // toggle bit 0
-                break;
-            case GLFW_KEY_F3:
-                inputBits ^= 1 << 1; // toggle bit 1
-                break;
-            case GLFW_KEY_F2:
-                inputBits ^= 1 << 2; // toggle bit 2
-                break;
-            case GLFW_KEY_F1:
-                inputBits ^= 1 << 3; // toggle bit 3
-                break;
-            default:
-                if (key >= GLFW_KEY_0 && key <= GLFW_KEY_9) {
-                    inputBits = key - GLFW_KEY_0;
-                } else if (key >= GLFW_KEY_A && key <= GLFW_KEY_F) {
-                    inputBits = 10 + (key - GLFW_KEY_A);
-                }
-                break;
+        switch (key)
+        {
+        case GLFW_KEY_F4:
+            inputBits ^= 1 << 0; // toggle bit 0
+            break;
+        case GLFW_KEY_F3:
+            inputBits ^= 1 << 1; // toggle bit 1
+            break;
+        case GLFW_KEY_F2:
+            inputBits ^= 1 << 2; // toggle bit 2
+            break;
+        case GLFW_KEY_F1:
+            inputBits ^= 1 << 3; // toggle bit 3
+            break;
+        default:
+            if (key >= GLFW_KEY_0 && key <= GLFW_KEY_9)
+            {
+                inputBits = key - GLFW_KEY_0;
+            }
+            else if (key >= GLFW_KEY_A && key <= GLFW_KEY_F)
+            {
+                inputBits = 10 + (key - GLFW_KEY_A);
+            }
+            break;
         }
         Main::setBits(inputBits);
     }
 }
 
-void resizeCallback(GLFWwindow *window, int width, int height) {
+void resizeCallback(GLFWwindow* window, int width, int height)
+{
     glViewport(0, 0, width, height);
     Renderer::setScreenSize({width, height});
     projection = ortho(0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f);
     glUniformMatrix4fv(projectionLoc, 1, GL_FALSE, value_ptr(projection));
 }
 
-Renderer::Renderer(const int &width, const int &height, const char *title) {
-
-
-    if (!glfwInit()) {
+Renderer::Renderer(const int& width, const int& height, const char* title)
+{
+    if (!glfwInit())
+    {
         throw runtime_error("Failed to initialize GLFW");
     }
-
-    window = glfwCreateWindow(width, height, title, nullptr, nullptr);
-    if (!window) {
-        glfwTerminate();
-        throw runtime_error("Failed to create GLFW window");
-    }
-
-    glfwMakeContextCurrent(window);
 
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_RESIZABLE, GL_TRUE);
 
+    window = glfwCreateWindow(width, height, title, nullptr, nullptr);
+    if (!window)
+    {
+        glfwTerminate();
+        throw runtime_error("Failed to create GLFW window");
+    }
+
+    glfwMakeContextCurrent(window);
+
     glfwSetKeyCallback(window, keyCallback);
     glfwSetFramebufferSizeCallback(window, resizeCallback);
 
     glfwSwapInterval(1);
 
-    if (!gladLoadGLLoader(reinterpret_cast<GLADloadproc>(glfwGetProcAddress))) {
+    if (!gladLoadGLLoader(reinterpret_cast<GLADloadproc>(glfwGetProcAddress)))
+    {
         throw runtime_error("Failed to initialize GLAD");
     }
 
@@ -223,7 +234,8 @@ void main() {
     int success;
     glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
 
-    if (!success) {
+    if (!success)
+    {
         char infoLog[1024];
         glGetProgramInfoLog(shaderProgram, sizeof(infoLog), nullptr, infoLog);
         cerr << "Shader Program linking failed: " << infoLog << "\n";
@@ -237,9 +249,6 @@ void main() {
 
     projectionLoc = glGetUniformLocation(shaderProgram, "projection");
 
-    glUniform2f(glGetUniformLocation(shaderProgram, "resolution"), screenSize.x, screenSize.y);
-    glUniform1f(glGetUniformLocation(shaderProgram, "time"), Main::getFrame());
-
     glGenVertexArrays(1, &vao);
     glGenBuffers(1, &vbo);
 
@@ -249,22 +258,23 @@ void main() {
     constexpr GLsizei stride = 7 * sizeof(float);
 
     // position (location 0)
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, static_cast<void *>(nullptr));
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, static_cast<void*>(nullptr));
     glEnableVertexAttribArray(0);
 
     // uv (location 1)
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void *>(2 * sizeof(float)));
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void*>(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
 
     // color (location 2)
-    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void *>(4 * sizeof(float)));
+    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void*>(4 * sizeof(float)));
     glEnableVertexAttribArray(2);
 
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
 }
 
-Renderer::~Renderer() {
+Renderer::~Renderer()
+{
     glDeleteBuffers(1, &vbo);
     glDeleteVertexArrays(1, &vao);
     glDeleteProgram(shaderProgram);
@@ -273,7 +283,8 @@ Renderer::~Renderer() {
     glfwTerminate();
 }
 
-void Renderer::drawFrame(const array<Segment, 7> &segments, const vector<vector<vec2> > &bitSquares) const {
+void Renderer::drawFrame(const array<Segment, 7>& segments, const vector<vector<vec2>>& bitSquares) const
+{
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -285,7 +296,7 @@ void Renderer::drawFrame(const array<Segment, 7> &segments, const vector<vector<
 
     // Draw background
     const vec3 bgColor = vec3(0.2f);
-    const vector<float> bgVertices =  {
+    const vector<float> bgVertices = {
         0, 0, 0, 0, bgColor.r, bgColor.g, bgColor.b,
         screenSize.x, 0, 1, 0, bgColor.r, bgColor.g, bgColor.b,
         screenSize.x, screenSize.y, 1, 1, bgColor.r, bgColor.g, bgColor.b,
@@ -300,10 +311,12 @@ void Renderer::drawFrame(const array<Segment, 7> &segments, const vector<vector<
     glDrawArrays(GL_TRIANGLE_FAN, 0, static_cast<GLsizei>(bgVertices.size() / 7));
 
     // Draw segments
-    for (const auto &[points, color]: segments) {
+    for (const auto& [points, color] : segments)
+    {
         vector<float> vertices;
         // For each point, add x,y then r,g,b
-        for (const vec2 &p: points) {
+        for (const vec2& p : points)
+        {
             vec2 uv = vec2(p.x / screenSize.x, p.y / screenSize.y);
 
             vertices.push_back(p.x);
@@ -324,7 +337,8 @@ void Renderer::drawFrame(const array<Segment, 7> &segments, const vector<vector<
         glDrawArrays(GL_TRIANGLE_FAN, 0, static_cast<GLsizei>(vertices.size() / 7));
     }
     // Draw bit Indicators
-    for (int i = 0; i < 4; ++i) {
+    for (int i = 0; i < 4; ++i)
+    {
         const int bitIndex = 3 - i;
         const uint8_t inputBits = Main::getBits();
         const bool isOn = (inputBits >> bitIndex) & 1;
@@ -332,7 +346,8 @@ void Renderer::drawFrame(const array<Segment, 7> &segments, const vector<vector<
 
         vector<float> vertices;
         // Add position and color per vertex
-        for (const vec2 &p: bitSquares[i]) {
+        for (const vec2& p : bitSquares[i])
+        {
             vec2 uv = vec2(p.x / screenSize.x, p.y / screenSize.y);
 
             vertices.push_back(p.x);
@@ -358,15 +373,18 @@ void Renderer::drawFrame(const array<Segment, 7> &segments, const vector<vector<
 }
 
 
-GLFWwindow *Renderer::getWindow() const {
+GLFWwindow* Renderer::getWindow() const
+{
     return window;
 }
 
-vec2 Renderer::getScreenSize() {
+vec2 Renderer::getScreenSize()
+{
     return screenSize;
 }
 
-void Renderer::setScreenSize(const vec2 newScreenSize) {
+void Renderer::setScreenSize(const vec2 newScreenSize)
+{
     screenSize.x = newScreenSize.x;
     screenSize.y = newScreenSize.y;
 }
