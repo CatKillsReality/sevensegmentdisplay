@@ -12,7 +12,6 @@ GLFWwindow *window;
 vec2 Renderer::screenSize = vec2(0);
 
 GLuint shaderProgram;
-GLuint glowShaderProgram;
 GLuint vao, vbo;
 GLint projectionLoc;
 
@@ -212,41 +211,6 @@ void main() {
 }
 )glsl";
 
-    constexpr auto glowVertexShaderSrc = R"glsl(
-    #version 330 core
-    layout(location = 0) in vec2 aPos;      // vertex position input
-    layout(location = 1) in vec2 aUV;       // UV input
-    layout(location = 2) in vec3 aColor;    // vertex color input
-
-
-    out vec2 fragUV;
-    out vec3 fragColor;                     // pass to fragment shader
-    uniform mat4 projection;                // uniform projection matrix
-
-    void main()
-    {
-        gl_Position = projection * vec4(aPos, 0.0, 1.0);
-        fragUV = aUV;
-        fragColor = aColor;
-    }
-    )glsl";
-
-    constexpr auto glowFragShaderSrc = R"glsl(
-    #version 330 core
-uniform vec2 resolution;
-in vec2 fragUV;
-in vec3 fragColor;
-out vec4 FragColor;
-
-uniform float time;
-
-void main() {
-        float dist = length(fragUV -vec2(0.5));
-        float intensity = smoothstep(0.4, 0.0, dist);
-        FragColor = vec4(fragColor, intensity * 0.6);
-}
-)glsl";
-
 
     const GLuint vertexShader = compileShader(GL_VERTEX_SHADER, vertexShaderSrc);
     const GLuint fragmentShader = compileShader(GL_FRAGMENT_SHADER, fragmentShaderSrc);
@@ -265,19 +229,10 @@ void main() {
         cerr << "Shader Program linking failed: " << infoLog << "\n";
         throw runtime_error("Shader Program linking failed");
     }
-    glGetProgramiv(glowShaderProgram, GL_LINK_STATUS, &success);
 
-    if (!success) {
-        char infoLog[1024];
-        glGetProgramInfoLog(glowShaderProgram, sizeof(infoLog), nullptr, infoLog);
-        cerr << "Shader Program linking failed: " << infoLog << "\n";
-        throw runtime_error("Shader Program linking failed");
-    }
 
     glDeleteShader(vertexShader);
     glDeleteShader(fragmentShader);
-    glDeleteShader(glowVertexShader);
-    glDeleteShader(glowFragShader);
     glUseProgram(shaderProgram);
 
     projectionLoc = glGetUniformLocation(shaderProgram, "projection");
