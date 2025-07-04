@@ -20,13 +20,13 @@ public:
     ~Renderer();
     void drawFrame(const array<Segment, 7>& segments, const vector<vector<vec2>>& bitSquares) const;
     [[nodiscard]] GLFWwindow* getWindow() const;
-    [[nodiscard]] vec2 getScreenSize() const;
-    void setScreenSize(vec2 newScreenSize);
+    [[nodiscard]] static vec2 getScreenSize();
+    static void setScreenSize(vec2 newScreenSize);
 
 private:
     GLFWwindow* window;
     mat4 projection{};
-    vec2 screenSize{};
+    static vec2 screenSize;
     GLuint shaderProgram{};
     GLuint glowShaderProgram{};
     GLuint vao{};

@@ -76,7 +76,7 @@ array<Segment, 7> calculateSegments(const vec2 screenSize, const uint8_t segment
 {
     array<Segment, 7> segments;
     const float centerX = screenSize.x / 2.0f;
-    const float yOffset = screenSize.y * -0.1;
+    const float yOffset = screenSize.y * -0.07;
     const float centerY = screenSize.y / 2.0f + yOffset;
 
     const float segmentLength = screenSize.y * 0.25f;
@@ -119,7 +119,7 @@ auto calculateBitIndicators(const vec2 screenSize)
 
     array<Segment, 7> segments;
     const float centerX = screenSize.x / 2.0f;
-    const float yOffset = screenSize.y * -0.1;
+    const float yOffset = screenSize.y * -0.07;
     const float centerY = screenSize.y / 2.0f + yOffset;
 
     const float segmentLength = screenSize.y * 0.25f;
@@ -149,7 +149,7 @@ int main()
         return -1;
     }
 
-    const auto* renderer = new Renderer(400, 600, "Sieben-Segment-Display");
+    const auto* renderer = new Renderer(500, 700, "Sieben-Segment-Display");
     GLFWwindow* window = renderer->getWindow();
     while (!glfwWindowShouldClose(window))
     {
@@ -163,12 +163,7 @@ int main()
         }
         previousTime = std::chrono::high_resolution_clock::now();
 
-
-        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-
-        renderer->drawFrame(calculateSegments(renderer->getScreenSize(), Main::getBits()), calculateBitIndicators(renderer->getScreenSize()));
+        renderer->drawFrame(calculateSegments(Renderer::getScreenSize(), Main::getBits()), calculateBitIndicators(Renderer::getScreenSize()));
 
         glfwSwapBuffers(window);
         glfwPollEvents();

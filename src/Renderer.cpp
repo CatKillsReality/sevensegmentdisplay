@@ -9,6 +9,7 @@ using namespace glm;
 
 mat4 projection;
 GLFWwindow *window;
+vec2 Renderer::screenSize = vec2(0);
 
 GLuint shaderProgram;
 GLuint glowShaderProgram;
@@ -63,34 +64,30 @@ void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods
 
 void resizeCallback(GLFWwindow *window, int width, int height) {
     glViewport(0, 0, width, height);
-
-    if (auto *renderer = static_cast<Renderer *>(glfwGetWindowUserPointer(window))) {
-        renderer->setScreenSize({width, height});
-    } else throw runtime_error("Failed to resize window due to invalid Renderer pointer");
+    Renderer::setScreenSize({width, height});
     projection = ortho(0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f);
     glUniformMatrix4fv(projectionLoc, 1, GL_FALSE, value_ptr(projection));
 }
 
 Renderer::Renderer(const int &width, const int &height, const char *title) {
-    screenSize = {width, height};
-    projection = ortho(0.0f, screenSize.x, screenSize.y, 0.0f);
+
 
     if (!glfwInit()) {
         throw runtime_error("Failed to initialize GLFW");
     }
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    glfwWindowHint(GLFW_RESIZABLE, GL_TRUE);
-
 
     window = glfwCreateWindow(width, height, title, nullptr, nullptr);
     if (!window) {
         glfwTerminate();
         throw runtime_error("Failed to create GLFW window");
     }
-    glfwSetWindowUserPointer(window, this);
+
     glfwMakeContextCurrent(window);
+
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    glfwWindowHint(GLFW_RESIZABLE, GL_TRUE);
 
     glfwSetKeyCallback(window, keyCallback);
     glfwSetFramebufferSizeCallback(window, resizeCallback);
@@ -101,7 +98,9 @@ Renderer::Renderer(const int &width, const int &height, const char *title) {
         throw runtime_error("Failed to initialize GLAD");
     }
 
-    glViewport(0, 0, width, height);
+    int framebufferWidth = width, framebufferHeight = height;
+    glfwGetFramebufferSize(window, &framebufferWidth, &framebufferHeight);
+    resizeCallback(window, framebufferWidth, framebufferHeight);
 
     constexpr auto vertexShaderSrc = R"glsl(
     #version 330 core
@@ -173,22 +172,22 @@ float pattern(vec2 p) {
 
 vec3 red_palette(float t) {
     vec3 a = vec3(0.55, 0.0, 0.0);  // brighter dark red base
-    vec3 b = vec3(0.2, 0.0, 0.0);  // smaller amplitude for less dark dips
+    vec3 b = vec3(0.1, 0.0, 0.0);  // smaller amplitude for less dark dips
     vec3 c = vec3(1.0, 1.0, 1.0);
     vec3 d = vec3(0.0, 0.0, 0.0);
     return a + b * cos(6.28318 * (c * t + d));
 }
 
-vec3 gray_palette(float t) {
-    vec3 a = vec3(0.1, 0.1, 0.1);
+vec3 dark_palette(float t) {
+    vec3 a = vec3(0.05);
     vec3 b = vec3(0.05, 0.05, 0.05);
     vec3 c = vec3(1.0, 1.0, 1.0);
     vec3 d = vec3(0.0, 0.0, 0.0);
     return a + b * cos(6.28318 * (c * t + d));
 }
 
-vec3 white_palette(float t) {
-    vec3 a = vec3(0.9, 0.9, 0.9);
+vec3 light_palette(float t) {
+    vec3 a = vec3(0.24);
     vec3 b = vec3(0.1, 0.1, 0.1);
     vec3 c = vec3(1.0, 1.0, 1.0);
     vec3 d = vec3(0.0, 0.0, 0.0);
@@ -204,9 +203,9 @@ void main() {
     if (fragColor.r == 1.0 && fragColor.g == 0.0 && fragColor.b == 0.0) {
         FragColor = vec4(red_palette(val), 1.0);
     } else if (fragColor.r == 0.2 && fragColor.g == 0.2 && fragColor.b == 0.2) {
-        FragColor = vec4(gray_palette(val), 1.0);
+        FragColor = vec4(dark_palette(val), 1.0);
     } else if (fragColor.r == 1.0 && fragColor.g == 1.0 && fragColor.b == 1.0) {
-        FragColor = vec4(white_palette(val), 1.0);
+        FragColor = vec4(light_palette(val), 1.0);
     } else {
         FragColor = vec4(fragColor, 1.0);
     }
@@ -247,20 +246,15 @@ void main() {
         FragColor = vec4(fragColor, intensity * 0.6);
 }
 )glsl";
+
+
     const GLuint vertexShader = compileShader(GL_VERTEX_SHADER, vertexShaderSrc);
     const GLuint fragmentShader = compileShader(GL_FRAGMENT_SHADER, fragmentShaderSrc);
-    const GLuint glowVertexShader = compileShader(GL_VERTEX_SHADER, glowVertexShaderSrc);
-    const GLuint glowFragShader = compileShader(GL_FRAGMENT_SHADER, glowFragShaderSrc);
 
     shaderProgram = glCreateProgram();
-    glowShaderProgram = glCreateProgram();
     glAttachShader(shaderProgram, vertexShader);
     glAttachShader(shaderProgram, fragmentShader);
     glLinkProgram(shaderProgram);
-
-    glAttachShader(glowShaderProgram, glowVertexShader);
-    glAttachShader(glowShaderProgram, glowFragShader);
-    glLinkProgram(glowShaderProgram);
 
     int success;
     glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
@@ -288,7 +282,6 @@ void main() {
 
     projectionLoc = glGetUniformLocation(shaderProgram, "projection");
 
-    glUniformMatrix4fv(projectionLoc, 1, GL_FALSE, value_ptr(projection));
     glUniform2f(glGetUniformLocation(shaderProgram, "resolution"), screenSize.x, screenSize.y);
     glUniform1f(glGetUniformLocation(shaderProgram, "time"), Main::getFrame());
 
@@ -326,6 +319,9 @@ Renderer::~Renderer() {
 }
 
 void Renderer::drawFrame(const array<Segment, 7> &segments, const vector<vector<vec2> > &bitSquares) const {
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
     glUseProgram(shaderProgram);
     glBindVertexArray(vao);
 
@@ -402,6 +398,8 @@ void Renderer::drawFrame(const array<Segment, 7> &segments, const vector<vector<
         glDrawArrays(GL_TRIANGLE_FAN, 0, static_cast<GLsizei>(vertices.size() / 7));
     }
     glBindVertexArray(0);
+
+    if (Main::getFrame() == 1) resizeCallback(window, screenSize.x, screenSize.y);
 }
 
 
@@ -409,7 +407,7 @@ GLFWwindow *Renderer::getWindow() const {
     return window;
 }
 
-vec2 Renderer::getScreenSize() const {
+vec2 Renderer::getScreenSize() {
     return screenSize;
 }
 
