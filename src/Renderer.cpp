@@ -97,11 +97,12 @@ Renderer::Renderer(const int& width, const int& height, const char* title)
     }
 
     glfwMakeContextCurrent(window);
+    glfwSwapInterval(1);
 
     glfwSetKeyCallback(window, keyCallback);
     glfwSetFramebufferSizeCallback(window, resizeCallback);
 
-    glfwSwapInterval(1);
+
 
     if (!gladLoadGLLoader(reinterpret_cast<GLADloadproc>(glfwGetProcAddress)))
     {
@@ -168,13 +169,13 @@ float fbm(vec2 p) {
 }
 
 float pattern(vec2 p) {
-    vec2 aPos = vec2(sin(time/30 * 0.005), sin((time/30) * 0.01)) * 6.0;
+    vec2 aPos = vec2(sin(time/20 * 0.005), sin((time/20) * 0.01)) * 6.0;
     float a = fbm(p * vec2(3.0) + aPos);
 
-    vec2 bPos = vec2(sin((time/30) * 0.01), sin((time/30) * 0.01)) * 1.0;
+    vec2 bPos = vec2(sin((time/20) * 0.01), sin((time/20) * 0.01)) * 1.0;
     float b = fbm((p + a) * vec2(0.6) + bPos);
 
-    vec2 cPos = vec2(-0.6, -0.5) + vec2(sin(-(time/30) * 0.001), sin((time/30) * 0.01)) * 2.0;
+    vec2 cPos = vec2(-0.6, -0.5) + vec2(sin(-(time/20) * 0.001), sin((time/20) * 0.01)) * 2.0;
     float c = fbm((p + b) * vec2(2.6) + cPos);
 
     return c;
@@ -295,7 +296,7 @@ void Renderer::drawFrame(const array<Segment, 7>& segments, const vector<vector<
     glUniform2f(glGetUniformLocation(shaderProgram, "resolution"), screenSize.x, screenSize.y);
 
     // Draw background
-    const vec3 bgColor = vec3(0.2f);
+    constexpr auto bgColor = vec3(0.2f);
     const vector<float> bgVertices = {
         0, 0, 0, 0, bgColor.r, bgColor.g, bgColor.b,
         screenSize.x, 0, 1, 0, bgColor.r, bgColor.g, bgColor.b,

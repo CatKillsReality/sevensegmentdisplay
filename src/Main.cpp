@@ -10,9 +10,8 @@ using namespace glm;
 
 uint8_t Main::bits = 0;
 float Main::frameNum = 0;
-
-constexpr double targetFPS = 60.0;
-constexpr double targetFrameTime = 1.0 / targetFPS;
+double frameCount = 0;
+double fps = 0.0f;
 
 auto previousTime = std::chrono::high_resolution_clock::now();
 
@@ -154,21 +153,25 @@ int main()
     while (!glfwWindowShouldClose(window))
     {
 
-        auto currentTime = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double> elapsed = currentTime - previousTime;
-        if (elapsed.count() < targetFrameTime)
-        {
-            std::this_thread::sleep_for(
-                std::chrono::duration<double>(targetFrameTime - elapsed.count()));
-        }
-        previousTime = std::chrono::high_resolution_clock::now();
+
 
         renderer->drawFrame(calculateSegments(Renderer::getScreenSize(), Main::getBits()), calculateBitIndicators(Renderer::getScreenSize()));
 
         glfwSwapBuffers(window);
+        glFinish();
         glfwPollEvents();
-
         (*Main::getFramePtr())++;
+
+        frameCount++;
+        auto currentTime = std::chrono::high_resolution_clock::now();
+        if (const double elapsed = std::chrono::duration<double>(currentTime - previousTime).count(); elapsed >= 1.0f) {
+            fps = frameCount / elapsed;
+            frameCount = 0;
+            previousTime = std::chrono::high_resolution_clock::now();
+#ifdef DEBUG_MODE
+            cout << "FPS " << fps << "\n";
+#endif
+        }
     }
 
     delete renderer;
