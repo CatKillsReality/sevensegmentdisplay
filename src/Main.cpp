@@ -33,7 +33,7 @@ constexpr uint8_t digitToSegments[16] = {
     0b0111001, // C
     0b1011110, // d
     0b1111001, // E
-    0b1110001 // F
+    0b1110001  // F
 };
 
 vector<vec2> createSegment(const float cx, const float cy, const float length, const float thickness, const float taper)
